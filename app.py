@@ -1,24 +1,29 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from matplotlib.gridspec import GridSpec
-import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # === KONFIGURASI STREAMLIT ===
 st.set_page_config(
     page_title="Demographics & Churn Prediction Dashboard",
     page_icon="📊",
-    layout="wide",  # Biar lebar penuh seperti dashboard bank
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Judul besar di atas
-st.title("📊 Demographics & Churn Prediction Dashboard")
-st.markdown("_Evaluating Current Clients | Churn Risk Analysis (Proxy Model)_")
+# Custom CSS untuk UI/UX lebih menarik
+st.markdown("""
+    <style>
+    .main { background-color: #f0f4f8; }
+    .stButton > button { background-color: #2C3E50; color: white; border-radius: 5px; }
+    .stMetric { background-color: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .sidebar .sidebar-content { background-color: #ffffff; }
+    </style>
+""", unsafe_allow_html=True)
 
 # === LOAD DATA ===
-@st.cache_data  # Agar data hanya dimuat sekali
+@st.cache_data
 def load_data():
     df = pd.read_csv('churn_results.csv', sep=';')
     df.columns = df.columns.str.strip()
@@ -50,187 +55,171 @@ def load_data():
 
 df = load_data()
 
-# === HITUNG METRICS ===
-total_clients = len(df)
-male_count = df[df['Gender'] == 'Male'].shape[0]
-female_count = df[df['Gender'] == 'Female'].shape[0]
-avg_income = df['TotalPrice'].mean()
-avg_recency = df['Recency'].mean()
-predicted_high_risk = df['Predicted_Churn'].sum()
-predicted_churn_rate = (predicted_high_risk / total_clients) * 100
-
-# === BUAT DASHBOARD MATPLOTLIB ===
-fig = plt.figure(figsize=(30, 22), facecolor='#f0f4f8')
-gs = GridSpec(7, 5, figure=fig, hspace=0.7, wspace=0.6)
-
-pink = '#FF6B9D'
-navy = '#2C3E50'
-green = '#27AE60'
-red = '#E74C3C'
-pastel_colors = sns.color_palette("pastel", 5)
-set2_colors = sns.color_palette("Set2", 5)
-
-fig.patch.set_edgecolor('#BDC3C7')
-fig.patch.set_linewidth(2)
-
-# (Sisanya SAMA PERSIS dengan kode Matplotlib Anda sebelumnya)
-# 1. Total Clients
-ax_total = fig.add_subplot(gs[0:2, 0])
-ax_total.axis('off')
-ax_total.add_patch(plt.Rectangle((0.1, 0.1), 0.8, 0.8, fill=True, facecolor='white', alpha=0.9, edgecolor=navy, linewidth=2))
-ax_total.text(0.5, 0.7, f"{total_clients:,}", ha='center', va='center', fontsize=48, fontweight='bold', color=navy)
-ax_total.text(0.5, 0.3, 'Total Clients', ha='center', va='center', fontsize=16, color='#555')
-
-# 2. Gender
-ax_gender = fig.add_subplot(gs[0:2, 1])
-bars = ax_gender.bar(['Female', 'Male'], [female_count, male_count], color=[pink, navy], width=0.7)
-ax_gender.set_title('Gender Breakdown', fontsize=18, fontweight='bold', color=navy)
-ax_gender.set_ylim(0, max(male_count, female_count) * 1.3)
-for bar in bars:
-    h = bar.get_height()
-    ax_gender.text(bar.get_x() + bar.get_width()/2, h + 20, f'{int(h)}', ha='center', va='bottom', fontsize=14, fontweight='bold')
-
-# 3. Avg Income
-ax_income = fig.add_subplot(gs[0:2, 2])
-ax_income.axis('off')
-ax_income.add_patch(plt.Rectangle((0.1, 0.1), 0.8, 0.8, fill=True, facecolor='white', alpha=0.9, edgecolor=pink, linewidth=2))
-ax_income.text(0.5, 0.7, f"${avg_income:,.0f}", ha='center', va='center', fontsize=36, fontweight='bold', color=pink)
-ax_income.text(0.5, 0.3, 'Avg Yearly Income', ha='center', va='center', fontsize=14, color='#555')
-
-# 4. Avg Recency
-ax_age = fig.add_subplot(gs[0:2, 3])
-ax_age.axis('off')
-ax_age.add_patch(plt.Rectangle((0.1, 0.1), 0.8, 0.8, fill=True, facecolor='white', alpha=0.9, edgecolor=navy, linewidth=2))
-ax_age.text(0.5, 0.7, f"{avg_recency:.0f} days", ha='center', va='center', fontsize=48, fontweight='bold', color=navy)
-ax_age.text(0.5, 0.3, 'Avg Recency\n(Age Proxy)', ha='center', va='center', fontsize=14, color='#555')
-
-# 5. Predicted Churn Rate
-ax_churn = fig.add_subplot(gs[0:2, 4])
-ax_churn.axis('off')
-ax_churn.add_patch(plt.Rectangle((0.1, 0.1), 0.8, 0.8, fill=True, facecolor='white', alpha=0.9, edgecolor=red if predicted_churn_rate > 30 else green, linewidth=3))
-ax_churn.text(0.5, 0.7, f"{predicted_churn_rate:.1f}%", ha='center', va='center', fontsize=48, fontweight='bold', color=red if predicted_churn_rate > 30 else green)
-ax_churn.text(0.5, 0.3, 'Predicted\nChurn Rate', ha='center', va='center', fontsize=16, color='#555', fontweight='bold')
-
-# 6. Age Group Bar Chart (FIXED)
-ax_age_bar = fig.add_subplot(gs[2:4, 2:5])
-age_gender = pd.crosstab(df['Age_Group'], df['Gender'])
-# Pastikan urutan Female → Male
-if 'Female' in age_gender.columns and 'Male' in age_gender.columns:
-    age_gender = age_gender[['Female', 'Male']]
-elif 'Female' in age_gender.columns:
-    age_gender = age_gender[['Female']]
-elif 'Male' in age_gender.columns:
-    age_gender = age_gender[['Male']]
-
-age_gender.plot(kind='bar', ax=ax_age_bar, color=[pink, navy][:age_gender.shape[1]], width=0.8, edgecolor='white')
-ax_age_bar.set_title('Clients by Age Group & Gender', fontsize=20, fontweight='bold', color=navy)
-ax_age_bar.set_ylabel('Number of Clients')
-ax_age_bar.grid(axis='y', linestyle='--', alpha=0.5)
-for c in ax_age_bar.containers:
-    ax_age_bar.bar_label(c, fmt='%d', fontsize=12, padding=3)
-
-# 7. Income Pie
-ax_income_pie = fig.add_subplot(gs[2, 0:2])
-income_vals = df['Income_Group'].value_counts()
-explode = [0.1 if i == income_vals.argmax() else 0.05 for i in range(len(income_vals))]
-ax_income_pie.pie(income_vals, labels=income_vals.index,
-                  autopct=lambda p: f'{p:.1f}%\n({int(p/100*len(df))})',
-                  colors=pastel_colors, explode=explode, shadow=True, textprops={'fontsize': 12})
-ax_income_pie.set_title('Income Group Distribution', fontsize=18, fontweight='bold', color=navy)
-
-# 8. Credit Pie
-ax_credit_pie = fig.add_subplot(gs[3, 0:2])
-credit_vals = df['Credit_Score'].value_counts()
-explode = [0.1 if i == credit_vals.argmax() else 0.05 for i in range(len(credit_vals))]
-ax_credit_pie.pie(credit_vals, labels=credit_vals.index,
-                  autopct=lambda p: f'{p:.1f}%\n({int(p/100*len(df))})',
-                  colors=set2_colors, explode=explode, shadow=True, textprops={'fontsize': 12})
-ax_credit_pie.set_title('Credit Score Distribution', fontsize=18, fontweight='bold', color=navy)
-
-# 9. Churn Risk by Age Group
-ax_churn_age = fig.add_subplot(gs[4:6, 0:2])
-churn_by_age = df.groupby('Age_Group')['Predicted_Churn'].mean() * 100
-churn_by_age.plot(kind='bar', ax=ax_churn_age, color=[red if x > 50 else '#FF9F40' for x in churn_by_age], width=0.7)
-ax_churn_age.set_title('Churn Risk % by Age Group', fontsize=18, fontweight='bold', color=navy)
-ax_churn_age.set_ylabel('Churn Risk (%)')
-ax_churn_age.set_ylim(0, 100)
-for i, v in enumerate(churn_by_age):
-    ax_churn_age.text(i, v + 3, f'{v:.1f}%', ha='center', fontweight='bold', fontsize=12)
-
-# 10. Churn Risk by Income Group
-ax_churn_income = fig.add_subplot(gs[4:6, 2:4])
-churn_by_income = df.groupby('Income_Group')['Predicted_Churn'].mean() * 100
-churn_by_income.plot(kind='bar', ax=ax_churn_income, color=[red if x > 50 else '#FF9F40' for x in churn_by_income], width=0.7)
-ax_churn_income.set_title('Churn Risk % by Income Group', fontsize=18, fontweight='bold', color=navy)
-ax_churn_income.set_ylabel('Churn Risk (%)')
-ax_churn_income.set_ylim(0, 100)
-for i, v in enumerate(churn_by_income):
-    ax_churn_income.text(i, v + 3, f'{v:.1f}%', ha='center', fontweight='bold', fontsize=12)
-
-# 11. Risk Category Summary
-ax_risk = fig.add_subplot(gs[4:6, 4])
-risk_count = df['Risk_Category'].value_counts()
-bars = ax_risk.bar(risk_count.index, risk_count.values, color=[green, red], width=0.6)
-ax_risk.set_title('Total by Risk Category', fontsize=18, fontweight='bold', color=navy)
-for bar in bars:
-    h = bar.get_height()
-    ax_risk.text(bar.get_x() + bar.get_width()/2, h + 10, f'{int(h)}', ha='center', fontsize=16, fontweight='bold')
-
-# Recommendations
-ax_recom = fig.add_subplot(gs[6, 0:5])
-ax_recom.axis('off')
-highest_age_risk = churn_by_age.idxmax()
-recommendations = f"""
-🔴 CHURN PREDICTION INSIGHTS & RECOMMENDATIONS
-
-• Predicted Churn Rate: {predicted_churn_rate:.1f}% ({predicted_high_risk:,} high-risk customers)
-• Highest Churn Risk Age Group: {highest_age_risk} ({churn_by_age.max():.1f}% risk)
-• Key Driver: Long recency (>180 days) strongly linked to churn
-
-📈 Recommended Actions:
-→ Re-engagement campaign for inactive >90 days
-→ Personalized offers for Low & Lower Middle income segments
-→ Loyalty rewards for 41-70 age group (high volume + risk)
-→ Monitor low-frequency customers closely
-
-Goal: Reduce churn by 15-20% in next quarter
-"""
-ax_recom.text(0.02, 0.95, recommendations, fontsize=15, va='top', ha='left',
-              bbox=dict(boxstyle="round,pad=1", facecolor='white', edgecolor=navy, linewidth=2),
-              color='#2c3e50', linespacing=1.6)
-
-# Contoh bagian akhir (sama seperti sebelumnya)
-ax_recom = fig.add_subplot(gs[6, 0:5])
-ax_recom.axis('off')
-highest_age_risk = df.groupby('Age_Group')['Predicted_Churn'].mean().idxmax()
-recommendations = f"""
-🔴 CHURN PREDICTION INSIGHTS & RECOMMENDATIONS
-
-• Predicted Churn Rate: {predicted_churn_rate:.1f}% ({predicted_high_risk:,} high-risk customers)
-• Highest Churn Risk Age Group: {highest_age_risk}
-• Key Driver: Long recency (>180 days) strongly linked to churn
-
-📈 Recommended Actions:
-→ Re-engagement campaign for inactive >90 days
-→ Personalized offers for Low & Lower Middle income segments
-→ Loyalty rewards for 41-70 age group
-→ Monitor low-frequency customers closely
-
-Goal: Reduce churn by 15-20% in next quarter
-"""
-ax_recom.text(0.02, 0.95, recommendations, fontsize=15, va='top', ha='left',
-              bbox=dict(boxstyle="round,pad=1", facecolor='white', edgecolor=navy, linewidth=2),
-              color='#2c3e50', linespacing=1.6)
-
-plt.tight_layout(rect=[0, 0.05, 1, 0.96])
-
-# === TAMPILKAN DI STREAMLIT ===
-st.pyplot(fig, use_container_width=True)
-
-# Tambahan: Info di sidebar
+# === SIDEBAR: FILTERS & INFO (INTERAKTIF) ===
 with st.sidebar:
-    st.header("📌 Informasi")
-    st.write(f"**Total Data:** {total_clients:,} pelanggan")
-    st.write(f"**Predicted Churn Rate:** {predicted_churn_rate:.1f}%")
-    st.write("Data source: `churn_results.csv`")
-    st.caption("Dashboard by Streamlit + Matplotlib")
+    st.header("🔍 Filters")
+    
+    # Filter by Country (asli dari data, proxy angka → nama jika ada mapping)
+    countries = sorted(df['Country'].unique())
+    selected_country = st.multiselect("Select Country", countries, default=countries)
+    
+    # Filter by Age Group
+    age_groups = sorted(df['Age_Group'].unique())
+    selected_age = st.multiselect("Select Age Group", age_groups, default=age_groups)
+    
+    # Filter by Risk Category
+    risks = df['Risk_Category'].unique()
+    selected_risk = st.multiselect("Select Risk Category", risks, default=risks)
+    
+    # Apply filters
+    filtered_df = df[
+        (df['Country'].isin(selected_country)) &
+        (df['Age_Group'].isin(selected_age)) &
+        (df['Risk_Category'].isin(selected_risk))
+    ]
+    
+    st.divider()
+    st.header("📌 Quick Info")
+    st.write(f"**Filtered Clients:** {len(filtered_df):,}")
+    st.write(f"**Avg Income:** ${filtered_df['TotalPrice'].mean():,.0f}")
+    st.write(f"**Avg Recency:** {filtered_df['Recency'].mean():.0f} days")
+    
+    if st.button("Reset Filters"):
+        st.experimental_rerun()
+
+# === MAIN CONTENT ===
+# Key Metrics di atas (lebih informatif dengan st.metric)
+col1, col2, col3, col4, col5 = st.columns(5)
+with col1:
+    st.metric("Total Clients", f"{len(filtered_df):,}", help="Jumlah pelanggan setelah filter")
+with col2:
+    st.metric("Male / Female", f"{filtered_df[filtered_df['Gender'] == 'Male'].shape[0]:,} / {filtered_df[filtered_df['Gender'] == 'Female'].shape[0]:,}", help="Rasio gender")
+with col3:
+    st.metric("Avg Income", f"${filtered_df['TotalPrice'].mean():,.0f}", help="Rata-rata belanja tahunan")
+with col4:
+    st.metric("Avg Recency", f"{filtered_df['Recency'].mean():.0f} days", help="Rata-rata hari sejak transaksi terakhir")
+with col5:
+    churn_rate = (filtered_df['Predicted_Churn'].sum() / len(filtered_df)) * 100 if len(filtered_df) > 0 else 0
+    delta_color = "inverse" if churn_rate > 30 else "normal"
+    st.metric("Predicted Churn Rate", f"{churn_rate:.1f}%", help="Persentase prediksi churn", delta_color=delta_color)
+
+# Tabs untuk organisasi konten (lebih UX friendly)
+tab1, tab2, tab3 = st.tabs(["📈 Demographics", "🚨 Churn Analysis", "📋 High-Risk List"])
+
+with tab1:
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        # Gender Breakdown (interaktif dengan Plotly)
+        gender_count = filtered_df['Gender'].value_counts().reset_index()
+        fig_gender = px.bar(gender_count, x='Gender', y='count', color='Gender',
+                            color_discrete_map={'Male': '#2C3E50', 'Female': '#FF6B9D'},
+                            title="Gender Breakdown",
+                            labels={'count': 'Number of Clients'})
+        fig_gender.update_layout(height=300, showlegend=False)
+        st.plotly_chart(fig_gender, use_container_width=True)
+        
+        # Income Pie
+        income_vals = filtered_df['Income_Group'].value_counts().reset_index()
+        fig_income = px.pie(income_vals, values='count', names='Income_Group',
+                            title="Income Group Distribution",
+                            color_discrete_sequence=px.colors.qualitative.Pastel,
+                            hole=0.3)  # Donut style untuk menarik
+        fig_income.update_traces(textposition='inside', textinfo='percent+label')
+        fig_income.update_layout(height=400)
+        st.plotly_chart(fig_income, use_container_width=True)
+    
+    with col_right:
+        # Age Group Bar (grouped by Gender)
+        age_gender = pd.crosstab(filtered_df['Age_Group'], filtered_df['Gender']).reset_index()
+        fig_age = px.bar(age_gender.melt(id_vars='Age_Group'), x='Age_Group', y='value', color='Gender',
+                         color_discrete_map={'Male': '#2C3E50', 'Female': '#FF6B9D'},
+                         title="Clients by Age Group & Gender",
+                         barmode='group',
+                         labels={'value': 'Number of Clients'})
+        fig_age.update_layout(height=400)
+        st.plotly_chart(fig_age, use_container_width=True)
+        
+        # Credit Score Pie
+        credit_vals = filtered_df['Credit_Score'].value_counts().reset_index()
+        fig_credit = px.pie(credit_vals, values='count', names='Credit_Score',
+                            title="Credit Score Distribution",
+                            color_discrete_sequence=px.colors.qualitative.Set2,
+                            hole=0.3)
+        fig_credit.update_traces(textposition='inside', textinfo='percent+label')
+        fig_credit.update_layout(height=400)
+        st.plotly_chart(fig_credit, use_container_width=True)
+
+with tab2:
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        # Churn Risk by Age Group
+        churn_by_age = (filtered_df.groupby('Age_Group')['Predicted_Churn'].mean() * 100).reset_index()
+        fig_churn_age = px.bar(churn_by_age, x='Age_Group', y='Predicted_Churn',
+                               title="Churn Risk % by Age Group",
+                               color='Predicted_Churn', color_continuous_scale='OrRd',
+                               labels={'Predicted_Churn': 'Churn Risk (%)'})
+        fig_churn_age.update_layout(height=400, coloraxis_showscale=False)
+        st.plotly_chart(fig_churn_age, use_container_width=True)
+    
+    with col_right:
+        # Churn Risk by Income Group
+        churn_by_income = (filtered_df.groupby('Income_Group')['Predicted_Churn'].mean() * 100).reset_index()
+        fig_churn_income = px.bar(churn_by_income, x='Income_Group', y='Predicted_Churn',
+                                  title="Churn Risk % by Income Group",
+                                  color='Predicted_Churn', color_continuous_scale='OrRd',
+                                  labels={'Predicted_Churn': 'Churn Risk (%)'})
+        fig_churn_income.update_layout(height=400, coloraxis_showscale=False)
+        st.plotly_chart(fig_churn_income, use_container_width=True)
+    
+    # Risk Category Distribution (interaktif pie)
+    risk_count = filtered_df['Risk_Category'].value_counts().reset_index()
+    fig_risk = px.pie(risk_count, values='count', names='Risk_Category',
+                      title="Total Clients by Risk Category",
+                      color_discrete_map={'Low Risk': '#27AE60', 'High Risk': '#E74C3C'},
+                      hole=0.3)
+    fig_risk.update_traces(textposition='inside', textinfo='percent+label')
+    fig_risk.update_layout(height=400)
+    st.plotly_chart(fig_risk, use_container_width=True)
+
+with tab3:
+    st.subheader("🚨 High-Risk Customers List")
+    st.markdown("Daftar pelanggan dengan prediksi churn tinggi (Predicted_Churn = 1). Klik kolom untuk sort.")
+    
+    high_risk = filtered_df[filtered_df['Predicted_Churn'] == 1][['CustomerID', 'Country', 'Age_Group', 'TotalPrice', 'Recency', 'Risk_Category']]
+    high_risk['TotalPrice'] = high_risk['TotalPrice'].map('${:,.0f}'.format)
+    st.dataframe(high_risk, use_container_width=True, height=400)
+    
+    # Download button untuk CSV
+    csv = high_risk.to_csv(index=False)
+    st.download_button("📥 Download High-Risk List (CSV)", csv, "high_risk_customers.csv", "text/csv")
+
+# === SUMMARY & RECOMMENDATIONS (INFORMATIF) ===
+st.divider()
+st.header("🔴 Summary Insights & Recommendations")
+col_sum1, col_sum2 = st.columns(2)
+
+with col_sum1:
+    st.subheader("Key Insights")
+    st.markdown(f"""
+    - **Total Filtered Clients:** {len(filtered_df):,}
+    - **Predicted Churn Rate:** {predicted_churn_rate:.1f}% ({predicted_high_risk:,} at risk)
+    - **Highest Risk Age Group:** {filtered_df.groupby('Age_Group')['Predicted_Churn'].mean().idxmax()}
+    - **Average Income:** ${filtered_df['TotalPrice'].mean():,.0f}
+    - **Average Recency:** {filtered_df['Recency'].mean():.0f} days
+    """)
+
+with col_sum2:
+    st.subheader("Recommended Actions")
+    st.markdown("""
+    - **Re-engagement Campaign:** Target customers inactive >90 days with personalized emails.
+    - **Discount Offers:** For Low & Lower Middle income groups to reduce churn.
+    - **Loyalty Program:** Reward frequent buyers in 41-70 age group.
+    - **Monitoring:** Track low-frequency transactions and send reminders.
+    """)
+    st.info("Goal: Reduce churn by 15-20% in the next quarter through targeted interventions.")
+
+# Footer
+st.markdown("---")
+st.caption("Dashboard created with Streamlit | Data as of January 01, 2026 | For demo purposes only")
